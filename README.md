@@ -1,6 +1,6 @@
 ## PyEBPF
 
-A bcc-based, eBPF (Extended-Berkeley-Packet-Filter) wrapper for Python.
+A bcc-based, eBPF (Extended-Berkeley-Packet-Filter) wrapper for Python 3.
 
 *Note*: Using this library requires a working installation of BCC, please refer to this [guide](https://github.com/iovisor/bcc/blob/master/INSTALL.md).
 
@@ -75,15 +75,15 @@ $> pip install pyebpf
 
 Next, import the EBPFWrapper object, instantiate it, and attach a function to an event.
 
-```python
+```python3
 # trace_fields.py bcc example, using pyebpf
 
 
 b = EBPFWrapper()
-print 'PID MESSAGE'
+print('PID MESSAGE')
 
 def hello(data, **kwargs):
-    print '{pid} Hello, World!'.format(pid=data.process_id)
+    print(f'{data.process_id} Hello, World!')
 
 b.attach_kprobe(event=b.get_syscall_fnname('clone'), fn=hello)
 
@@ -93,12 +93,14 @@ while True:
     except KeyboardInterrupt:
         print 'Bye !'
         break
-        
+```
+
+```python3
 b = EBPFWrapper()
-print 'COMM PID SOCKETFD'
+print('COMM PID SOCKETFD')
 
 def on_bind(data, **kwargs):
-    print '{comm} {pid} {fd}'.format(comm=data.process_name, pid=data.process_id, fd=data.fd, addr=data.umyaddr)
+    print(f'{data.process_name} {data.process_id} {data.fd}')
 
 b.attach_kprobe(event=b.get_syscall_fnname('bind'), fn=on_bind)
 
@@ -112,7 +114,10 @@ while True:
     except KeyboardInterrupt:
         print 'Bye !'
         break
-        
+
+```
+
+```python3
 # Supplying a native route
 
 from pyebpf.ebpf_wrapper import EBPFWrapper
@@ -128,9 +133,9 @@ b.attach_kprobe(event='sys_open', fn_name='hello')
 
 while True:
     try:
-        print b.trace_fields()
+        print(b.trace_fields())
     except KeyboardInterrupt:
-        print 'Bye !'
+        print('Bye !')
         break
 ```
 

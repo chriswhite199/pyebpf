@@ -1,3 +1,4 @@
+import ctypes
 import ctypes as ct
 import logging
 import os
@@ -6,7 +7,7 @@ import types
 # noinspection PyUnresolvedReferences
 from collections import OrderedDict
 # noinspection PyProtectedMember
-from threading import Thread, Event, _Event, current_thread
+from threading import Thread, Event, current_thread
 
 from bcc import BPF
 
@@ -17,14 +18,13 @@ from pyebpf.normalizers import normalize_event
 class EBPFProgramDescriptor(object):
     """ A wrapper around a program text and its extra parameters as a ctypes data class """
 
-    def __init__(self, program_text, ctypes_data_class):
-        # type: (types.StringTypes, types.TypeType) -> None
+    def __init__(self, program_text: str, ctypes_data_class: type) -> None:
         """
         :param program_text: str - BPF-program text
         :param ctypes_data_class: ctypes.Structure - A Data class representing any extra parameters for the ebpf routine
         """
-        assert_type(types.StringTypes, program_text=program_text)
-        assert_type(types.TypeType, ctypes_data_class=ctypes_data_class)
+        assert_type((str,), program_text=program_text)
+        assert_type(type, ctypes_data_class=ctypes_data_class)
 
         self.program_text = program_text
         self.ctypes_data_class = ctypes_data_class
@@ -33,20 +33,18 @@ class EBPFProgramDescriptor(object):
 class AttachedKProbeDescriptor(object):
     """ A wrapper around an event, a BPF object and an optional managed polling thread """
 
-    def __init__(self, event, bpf, polling_thread_event=None):
-        # type: (types.StringTypes, BPF, [Event]) -> None
-
+    def __init__(self, event: str, bpf: BPF, polling_thread_event: Event = None):
         """
         :param event: str - An event name
         :param bpf: BPF - A BPF object with a compiled module
         :param polling_thread_event: Event - An event to set once the kprobe is detached
         """
 
-        assert_type(types.StringTypes, event=event)
+        assert_type((str,), event=event)
         assert_type(BPF, bpf=bpf)
 
         if polling_thread_event is not None:
-            assert_type(_Event, polling_thread_event=polling_thread_event)
+            assert_type(Event, polling_thread_event=polling_thread_event)
 
         self.event = normalize_event(event)
         self.bpf = bpf
@@ -56,24 +54,21 @@ class AttachedKProbeDescriptor(object):
 class NativeArgument(object):
     """ Represents an argument that is passed to a native function. """
 
-    def __init__(self, native_type_as_string, name, ctypes_type):
-        # type: (types.StringTypes, types.StringTypes, types.TypeType) -> None
-
+    def __init__(self, native_type_as_string: str, name: str, ctypes_type: type) -> None:
         """
         :param native_type_as_string: str - A string representing the c-type of the argument, e.g. 'unsigned int'
         :param name: str - The name of the argument
         :param ctypes_type: The type represented as a ctypes type
         """
-        assert_type(types.StringTypes, native_type_as_string=native_type_as_string)
-        assert_type(types.StringTypes, name=name)
-        assert_type(types.TypeType, ctypes_type=ctypes_type)
+        assert_type((str,), native_type_as_string=native_type_as_string)
+        assert_type((str,), name=name)
+        assert_type(type, ctypes_type=ctypes_type)
 
         self.native_type_as_string = native_type_as_string
         self.name = name
         self.ctypes_type = ctypes_type
 
-    def is_string(self):
-        # type: () -> types.BooleanType
+    def is_string(self) -> bool:
         """
         :return: True if native type is a char pointer
         :rtype: bool
@@ -81,8 +76,7 @@ class NativeArgument(object):
         return NativeArgument.is_native_type_a_string(self.native_type_as_string)
 
     @staticmethod
-    def is_native_type_a_string(native_type_as_string):
-        # type: () -> types.BooleanType
+    def is_native_type_a_string(native_type_as_string) -> bool:
         """
         :param: native_type_as_string: str - A string representing a native type
         :return: True if native type is a char pointer
@@ -131,7 +125,7 @@ class EBPFWrapper(BPF):
         NativeArgument('u32', 'thread_id', ct.c_uint32),
         NativeArgument('u32', 'group_id', ct.c_uint32),
         NativeArgument('u32', 'user_id', ct.c_uint32),
-        NativeArgument('char*', 'process_name', (ct.c_char * 16)),
+        NativeArgument('char*', 'process_name', (ct.c_char * 128)),
     ]
 
     # A string representing a type, or a byte size - to a ctypes type
@@ -163,12 +157,11 @@ class EBPFWrapper(BPF):
     logger = logging.getLogger('ebpf_wrapper')
 
     # noinspection PyMissingConstructor
-    def __init__(self, **kwargs):
-        # type: (**types.ObjectType) -> None
-
+    def __init__(self, **kwargs) -> None:
         self._attached_kprobes = {}
 
         log_level = kwargs.get('log_level', logging.INFO)
+        kwargs.pop('log_level', None)
         self.logger.setLevel(log_level)
 
         if kwargs:
@@ -177,14 +170,13 @@ class EBPFWrapper(BPF):
         else:
             super(EBPFWrapper, self).__init__(text=self._DUMMY_PROGRAM)
 
-    def detach_kprobe(self, event):
-        # type: (types.StringTypes) -> None
+    def detach_kprobe(self, event: str) -> None:
         """
         Detaches kprobes associated with the event nmae.
 
         :param event: str - Event name to detach kprobes of
         """
-        assert_type(types.StringTypes, event=event)
+        assert_type((str,), event=event)
 
         event = normalize_event(event)
 
@@ -216,8 +208,11 @@ class EBPFWrapper(BPF):
             self._attached_kprobes.pop(event)
 
     # noinspection PyMethodOverriding
-    def attach_kprobe(self, event, fn=None, implicitly_add_syscall_args=True, **kwargs):
-        # type: (types.StringTypes, types.FunctionType, types.BooleanType, **types.ObjectType) -> None
+    def attach_kprobe(self,
+                      event: (str, bytes),
+                      fn: types.FunctionType,
+                      implicitly_add_syscall_args: bool = True,
+                      **kwargs) -> None:
         """
         Attaches a kernel probe to a given python function
 
@@ -226,7 +221,8 @@ class EBPFWrapper(BPF):
         :param implicitly_add_syscall_args: If True, will try to implicitly generate the syscall arguments,
                                             copying them from our ebpf routine back to user-space
         """
-        assert_type(types.StringTypes, event=event)
+        assert_type((str, bytes), event=event)
+        event = event.decode()
         if fn is not None:
             assert_type(types.FunctionType, fn=fn)
 
@@ -243,7 +239,7 @@ class EBPFWrapper(BPF):
 
             # noinspection PyUnresolvedReferences
             for syscall_prefix in self._syscall_prefixes:
-                syscall_prefix = syscall_prefix.lower()
+                syscall_prefix = syscall_prefix.decode().lower()
                 if event.startswith(syscall_prefix) or \
                         event.startswith(self.KRPOBE_EVENT_SYSCALL_PREFIX + syscall_prefix):
                     event_without_syscall_prefix = event \
@@ -266,15 +262,14 @@ class EBPFWrapper(BPF):
             if attached_kprobe_descriptor is not None:
                 self._attached_kprobes.setdefault(event, []).append(attached_kprobe_descriptor)
 
-    def _replace_event_alias_if_needed(self, event_without_syscall_prefix):
-        # type: (types.StringTypes) -> types.StringTypes
+    def _replace_event_alias_if_needed(self, event_without_syscall_prefix: str) -> str:
         """
         Follows known event aliases (if any) and replaces them, or return the origin event
 
         :param event_without_syscall_prefix: str - The event without a syscall prefix
         :return: str - The dereferenced event from the alias, or the original event if no alias was found
         """
-        assert_type(types.StringTypes, event_without_syscall_prefix=event_without_syscall_prefix)
+        assert_type((str,), event_without_syscall_prefix=event_without_syscall_prefix)
 
         event_alias = self.SYSCALL_EVENT_ALIASES.get(event_without_syscall_prefix, None)
         if event_alias is not None:
@@ -284,9 +279,11 @@ class EBPFWrapper(BPF):
 
         return event_without_syscall_prefix
 
-    def _attach_kprobe_with_managed_polling_thread(self, event, event_without_syscall_prefix, fn,
-                                                   implicitly_add_syscall_args):
-        # type: (types.StringTypes, types.StringTypes, types.FunctionType, types.BooleanType) -> AttachedKProbeDescriptor
+    def _attach_kprobe_with_managed_polling_thread(self,
+                                                   event: str,
+                                                   event_without_syscall_prefix: str,
+                                                   fn: types.FunctionType,
+                                                   implicitly_add_syscall_args: bool) -> AttachedKProbeDescriptor:
         """
         Attaches a kprobe with a given event, and spawns a daemon thread that polls on the kprobe map and calls
         the passed function as a callback.
@@ -298,8 +295,8 @@ class EBPFWrapper(BPF):
         :return: An AttachedKProbeDescriptor object that wraps the event, the bpf object and the polling thread
         :rtype: AttachedKProbeDescriptor
         """
-        assert_type(types.StringTypes, event=event)
-        assert_type(types.StringTypes, event_without_syscall_prefix=event_without_syscall_prefix)
+        assert_type((str,), event=event)
+        assert_type((str,), event_without_syscall_prefix=event_without_syscall_prefix)
         assert_type(types.FunctionType, fn=fn)
 
         function_name = fn.__name__
@@ -317,8 +314,10 @@ class EBPFWrapper(BPF):
 
         return AttachedKProbeDescriptor(event, bpf, detach_event)
 
-    def _generate_program_descriptor(self, event, function_name, implicitly_add_syscall_args):
-        # type: (types.StringTypes, types.StringTypes) -> EBPFProgramDescriptor
+    def _generate_program_descriptor(self,
+                                     event: str,
+                                     function_name: str,
+                                     implicitly_add_syscall_args: bool) -> EBPFProgramDescriptor:
         """
         :param event: str - An event / syscall name
         :param function_name: A function name (The ebpf function will use this name)
@@ -326,8 +325,8 @@ class EBPFWrapper(BPF):
         :return: A program text that copies all of the syscall parameters back to user-space
         :rtype: BPFProgramDescriptor
         """
-        assert_type(types.StringTypes, event=event)
-        assert_type(types.StringTypes, function_name=function_name)
+        assert_type((str,), event=event)
+        assert_type((str,), function_name=function_name)
 
         syscall_args = []
         if not implicitly_add_syscall_args:
@@ -358,11 +357,12 @@ BPF_PERF_OUTPUT(events);
 }
 ''' % dict(func_signature=function_signature, data_struct_copy_body=data_struct_copy_body)
 
+        self.logger.debug(f'Program text: {program_text}')
+
         data_class = self._generate_data_class(syscall_args)
         return EBPFProgramDescriptor(program_text, data_class)
 
-    def _get_syscall_arguments(self, syscall_name, skip_till_offset=SKIP_SYSCALL_ARGS_TILL_OFFSET):
-        # type: (types.StringTypes, types.IntType) -> types.ListType
+    def _get_syscall_arguments(self, syscall_name: str, skip_till_offset: int = SKIP_SYSCALL_ARGS_TILL_OFFSET) -> list:
         """
 
         :param syscall_name: str - The name of the syscall to get the arguments for
@@ -371,8 +371,8 @@ BPF_PERF_OUTPUT(events);
         :rtype: list
         """
 
-        assert_type(types.StringTypes, syscall_name=syscall_name)
-        assert_type(types.IntType, skip_till_offset=skip_till_offset)
+        assert_type((str,), syscall_name=syscall_name)
+        assert_type(int, skip_till_offset=skip_till_offset)
 
         format_file_path = self.SYSCALL_FORMAT_FILE_TEMPLATE.format(syscall_name=syscall_name)
         self.logger.debug('Will try to read syscall format file={}'.format(format_file_path))
@@ -396,7 +396,7 @@ BPF_PERF_OUTPUT(events);
                     offset = format_parts[1]
                     assert offset.startswith('offset:'), 'Expected offset part to start with "offset:"'
 
-                    offset_match = re.findall('\d+', offset)
+                    offset_match = re.findall(r'\d+', offset)
                     assert offset_match and len(offset_match) == 1, 'Expected offset part to contain a single number'
 
                     offset_num = int(offset_match[0])
@@ -407,7 +407,7 @@ BPF_PERF_OUTPUT(events);
                     size = format_parts[2]
                     assert size.startswith('size:'), 'Expected size part to start with "size:"'
 
-                    size_match = re.findall('\d+', size)
+                    size_match = re.findall(r'\d+', size)
                     assert size_match and len(size_match) == 1, 'Expected size part to contain a single number'
 
                     type_size = int(size_match[0])
@@ -424,18 +424,18 @@ BPF_PERF_OUTPUT(events);
                     args.append(native_arg)
 
                     if len(args) > self.MAX_PASSED_ARGS:
-                        self.logger.warn("We've populated the maximum number of arguments ({}); "
-                                         "Will return a partial argument list".format(self.MAX_PASSED_ARGS))
+                        self.logger.warning(f"We've populated the maximum number of arguments "
+                                            f"({self.MAX_PASSED_ARGS}); "
+                                            f"Will return a partial argument list")
                         break
         except Exception as e:
-            self.logger.error('Failed parsing syscall format file from path={} err={}; '
-                              'will return None'.format(format_file_path, e.message))
+            self.logger.error(f'Failed parsing syscall format file from path={format_file_path} err={e}; '
+                              f'will return None')
             return []
 
         return args
 
-    def _generate_data_struct(self, syscall_args):
-        # type: (types.ListType) -> types.StringTypes
+    def _generate_data_struct(self, syscall_args: list) -> str:
         """
         Generates a data structure representing string that is copied from kernel-space to user-space.
 
@@ -443,7 +443,7 @@ BPF_PERF_OUTPUT(events);
         :return: Data structure string to be shared from kernel space to user space (Could be empty)
         :rtype: str
         """
-        assert_type(types.ListType, syscall_args=syscall_args)
+        assert_type(list, syscall_args=syscall_args)
 
         data_struct_template = '''
 struct data_t {
@@ -455,10 +455,10 @@ struct data_t {
         formatted_args = OrderedDict()
         for arg in (self.DEFAULT_DATA_STRUCTURE_MEMBERS + syscall_args):
             if arg.name in formatted_args:
-                self.logger.warn('Duplicate arg found - will take the last match')
+                self.logger.warning('Duplicate arg found - will take the last match')
 
             if arg.is_string():
-                self.logger.debug('Spotted a string - implicitly converting to char array')
+                self.logger.debug(f'Spotted a string ({arg.name}) - implicitly converting to char array')
                 # noinspection PyBroadException
                 try:
                     # noinspection PyUnresolvedReferences, PyProtectedMember
@@ -475,10 +475,9 @@ struct data_t {
                 )
             formatted_args[arg.name] = str(arg)
 
-        return data_struct_template % dict(syscall_args=';\n    '.join(formatted_args.values()))
+        return data_struct_template % dict(syscall_args=';\n    '.join(list(formatted_args.values())))
 
-    def _generate_data_struct_copy_body(self, syscall_args):
-        # type: (types.ListType) -> types.StringTypes
+    def _generate_data_struct_copy_body(self, syscall_args: list) -> str:
         """
         Generates a string representing the copying of the syscall arguments to our shared data-structure
 
@@ -487,7 +486,7 @@ struct data_t {
                 (that are passed to our ebpf handler) back to user mode
         :rtype: str
         """
-        assert_type(types.ListType, syscall_args=syscall_args)
+        assert_type(list, syscall_args=syscall_args)
 
         body = '''
     data.current_time_ns = bpf_ktime_get_ns();
@@ -500,7 +499,7 @@ struct data_t {
 
         for arg in syscall_args:
             if arg.is_string():
-                self.logger.debug('Spotted a string - will use bpf_probe_read to copy it')
+                self.logger.debug(f'Spotted a string ({arg.name}) - will use bpf_probe_read to copy it')
                 body += 'bpf_probe_read(&data.{arg_name}, sizeof(data.{arg_name}), (void*){arg_name});\n    '.format(
                     arg_name=arg.name)
             else:
@@ -508,9 +507,7 @@ struct data_t {
 
         return body
 
-    def _generate_data_class(self, syscall_args):
-        # type: (types.ListType) -> types.TypeType
-
+    def _generate_data_class(self, syscall_args: list) -> type:
         """
         Generates a ctypes data-class given the syscall arguments
 
@@ -519,7 +516,8 @@ struct data_t {
         :return: ctypes class that the members to copy from our ebpf routine back to user-space
         :rtype: type
         """
-        assert_type(types.ListType, syscall_args=syscall_args)
+        assert_type(list, syscall_args=syscall_args)
+        self.logger.debug(f'syscall args: {syscall_args}')
         fields = [(arg.name, arg.ctypes_type) for arg in (self.DEFAULT_DATA_STRUCTURE_MEMBERS + syscall_args)]
 
         # noinspection PyUnresolvedReferences
@@ -531,9 +529,7 @@ struct data_t {
         return Data
 
     # noinspection PyTypeChecker
-    def _resolve_ctype(self, type_as_string, type_size):
-        # type: (types.StringTypes, types.IntType) -> types.TypeType
-
+    def _resolve_ctype(self, type_as_string: str, type_size: int):
         """
         Given a string representing a type, and the type size - resolve a ctypes type
 
@@ -542,14 +538,14 @@ struct data_t {
         :return: A ctypes type representing the native type
         :rtype: type
         """
-        assert_type(types.StringTypes, type_as_string=type_as_string)
-        assert_type(types.IntType, type_size=type_size)
+        assert_type((str,), type_as_string=type_as_string)
+        assert_type(int, type_size=type_size)
 
         # Qualifiers are irrelevant
         type_as_string = type_as_string.replace('const', '').strip()
 
         if NativeArgument.is_native_type_a_string(type_as_string):
-            self.logger.debug('Spotted a string - will use an array instead')
+            self.logger.debug(f'Spotted a string - will use an array instead')
             return ct.c_char * self.MAX_ARRAY_SIZE
         else:
             return self.C_TYPE_MAPPING.get(
@@ -558,20 +554,18 @@ struct data_t {
             )
 
     @staticmethod
-    def _generate_function_signature(function_name, syscall_args):
-        # type: (types.StringTypes, types.ListType) -> types.StringTypes
+    def _generate_function_signature(function_name: str, syscall_args: list) -> str:
         """
-
         :param function_name: The name of the ebpf function
         :param syscall_args: List of syscall arguments
         :return: A string representing the ebpf function signature (Including the syscall arguments, and the mandatory
                 registers context struct)
         :rtype: str
         """
-        assert_type(types.StringTypes, function_name=function_name)
-        assert_type(types.ListType, syscall_args=syscall_args)
+        assert_type((str,), function_name=function_name)
+        assert_type(list, syscall_args=syscall_args)
 
-        syscall_args = map(lambda x: str(x), syscall_args)
+        syscall_args = [str(x) for x in syscall_args]
         base_function_signature = 'int {function_name} (struct pt_regs* ctx'.format(function_name=function_name)
         if syscall_args:
             base_function_signature += ', {syscall_args}'.format(syscall_args=', '.join(syscall_args))
@@ -579,8 +573,11 @@ struct data_t {
         base_function_signature += ')'
         return base_function_signature
 
-    def _read_buffer_pool(self, bpf, callback, data_class, detach_event):
-        # type: (BPF, types.FunctionType, types.TypeType, _Event) -> None
+    def _read_buffer_pool(self,
+                          bpf: BPF,
+                          callback: types.FunctionType,
+                          data_class: type,
+                          detach_event: Event) -> None:
 
         """
         A routine that will be called from a separate thread, that will call a given python callback, till
@@ -593,14 +590,12 @@ struct data_t {
         """
         assert_type(BPF, bpf=bpf)
         assert_type(types.FunctionType, callback=callback)
-        assert_type(types.TypeType, data_class=data_class)
-        assert_type(_Event, detach_event=detach_event)
+        assert_type(type, data_class=data_class)
+        assert_type(Event, detach_event=detach_event)
 
         thread_name = current_thread().getName()
 
-        def call_callback(cpu, data, size):
-            # type: (types.IntType, types.TypeType, types.IntType) -> None
-
+        def call_callback(cpu: int, data: type, size: int) -> None:
             """
             On every BPF map poll, we'll call this wrapper, which will call the passed callback.
 
